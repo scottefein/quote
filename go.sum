@@ -1,0 +1,16 @@
+github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/go-chi/chi v4.0.2+incompatible h1:maB6vn6FqCxrpz4FqWdh4+lwpyZIQS7YEAUcHlgXVRs=
+github.com/go-chi/chi v4.0.2+incompatible/go.mod h1:eB3wogJHnLi3x/kFX2A+IbTBlXxmMeXJVKy9tTv1XzQ=
+github.com/plombardi89/gozeug v0.0.0-20190320044233-2a6f2d4f24c2 h1:9Lhf9a35bjXOCjWsPSGGKxNJ08QI6ueX/nvNUUXoBt0=
+github.com/plombardi89/gozeug v0.0.0-20190320044233-2a6f2d4f24c2/go.mod h1:qXiZqor5Njnmyq2qll/JK8z/YMV7gy/NAWsMnpqo0+0=
+github.com/plombardi89/gozeug v0.0.0-20190417182030-906a441a476e h1:ViPFOCsUZFUWTA0i3TdzSAwVxqergvoYw6nd9dc2WMw=
+github.com/plombardi89/gozeug v0.0.0-20190417182030-906a441a476e/go.mod h1:qXiZqor5Njnmyq2qll/JK8z/YMV7gy/NAWsMnpqo0+0=
+github.com/plombardi89/gozeug v0.0.0-20190417182801-681315504dae h1:6/NxYKl1DpFVWRkScIUmWZdRnLyMMqJP9WZJfdNtOyg=
+github.com/plombardi89/gozeug v0.0.0-20190417182801-681315504dae/go.mod h1:qXiZqor5Njnmyq2qll/JK8z/YMV7gy/NAWsMnpqo0+0=
+github.com/plombardi89/gozeug v0.0.0-20190417183658-0b46c5bf7d57 h1:Wglr6zoBv77oHzuXwCbUVK0yiCCrM5GW8vSmfjt2V80=
+github.com/plombardi89/gozeug v0.0.0-20190417183658-0b46c5bf7d57/go.mod h1:qXiZqor5Njnmyq2qll/JK8z/YMV7gy/NAWsMnpqo0+0=
+github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
+github.com/stretchr/objx v0.2.0/go.mod h1:qt09Ya8vawLte6SNmTgCsAVtYtaKzEcn8ATUoHMkEqE=
+github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
