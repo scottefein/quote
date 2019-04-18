@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/gorilla/websocket"
 	"github.com/plombardi89/gozeug/randomzeug"
 	"log"
 	"net/http"
@@ -21,12 +22,14 @@ const (
 )
 
 type Server struct {
-	id     string
-	host   string
-	port   int
-	router *chi.Mux
-	random *randomzeug.Random
-	quotes []string
+	id       string
+	host     string
+	port     int
+	router   *chi.Mux
+	upgrader websocket.Upgrader
+	hub      *Hub
+	random   *randomzeug.Random
+	quotes   []string
 }
 
 type QuoteResult struct {
@@ -55,15 +58,33 @@ func (s *Server) GetQuote(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) StreamQuotes(w http.ResponseWriter, r *http.Request) {
+	conn, err := s.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	client := &Client{hub: s.hub, conn: conn, send: make(chan []byte, 256)}
+	client.hub.register <- client
+
+	go client.readPump()
+	go client.writePump()
+}
+
 func (s *Server) ConfigureRouter() {
 	s.router.Use(middleware.Recoverer)
 	s.router.Use(middleware.RequestID)
 	s.router.Use(middleware.RealIP)
 
 	s.router.Get("/", s.GetQuote)
+	s.router.HandleFunc("/ws", s.StreamQuotes)
 }
 
 func (s *Server) Start() error {
+	s.hub = newHub(s.random, s.quotes)
+	go s.hub.run()
+
 	listenAddr := fmt.Sprintf("%s:%d", s.host, s.port)
 	log.Printf("listening on %s\n", listenAddr)
 	return http.ListenAndServe(listenAddr, s.router)
@@ -97,12 +118,18 @@ func main() {
 	}
 
 	random := randomzeug.NewRandom()
-
 	s := Server{
 		id:     generateServerID(random),
 		host:   os.Getenv(EnvHOST),
 		port:   port,
 		router: chi.NewRouter(),
+		upgrader: websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool {
+				return true
+			},
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+		},
 		random: random,
 		quotes: startingQuotes,
 	}
