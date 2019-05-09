@@ -59,8 +59,8 @@ var openapiDocument = `
 `
 
 func (s *Server) GetOpenAPIDocument(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
 
 	if _, err := w.Write([]byte(openapiDocument)); err != nil {
 		log.Panicln(err)

@@ -67,8 +67,8 @@ func (s *Server) GetQuote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
 
 	if _, err := w.Write(resJson); err != nil {
 		log.Panicln(err)
