@@ -1,9 +1,8 @@
 ---
-language: go
+language: generic
 
-go:
-  - "1.11"
-  - "1.12"
+services:
+  - docker
 
 script:
-  - make
+  - make build.image
