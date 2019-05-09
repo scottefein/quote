@@ -18,39 +18,49 @@ import (
 	"net/http"
 )
 
-var openapiDocument = `---
-openapi: 3.0.0
-info:
-  title: Quote Service API
-  description: The Quote Service API
-  version: dev
-
-servers:
-  - url: http://foo/
-
-paths:
-  /:
-    get:
-      summary: Return a randomly selected quote.
-      responses:
-        '200':
-          description: A JSON object with a quote and some additional metadata.
-          content:
-            application/json:
-              schema: 
-                type: object
-                properties: 
-                  server:
-                    type: string
-                  quote:
-                    type: string
-                  time: 
-                    type: string
+var openapiDocument = `
+{
+	"openapi": "3.0.0",
+	"info": {
+		"title": "Quote Service API",
+		"description": "Quote Service API",
+		"version": "0.1.0"
+	},
+	"servers": [
+		{
+			"url": "http://api.example.com/v1"
+		}
+	],
+	"paths": {
+		"/": {
+			"get": {
+				"summary": "Return a randomly selected quote.",
+				"responses": {
+					"200": {
+						"description": "A JSON object with a quote and some additional metadata.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"server": {"type": "string"},
+										"quote": {"type": "string"},
+										"time": {"type": "string"}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
 `
 
 func (s *Server) GetOpenAPIDocument(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Header().Set("content-type", "application/yaml")
+	w.Header().Set("content-type", "application/json")
 
 	if _, err := w.Write([]byte(openapiDocument)); err != nil {
 		log.Panicln(err)

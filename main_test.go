@@ -56,6 +56,6 @@ func TestServer_GetOpenAPIDocument(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Equal(t, "application/yaml", rr.Header().Get("content-type"))
+	assert.Equal(t, "application/json", rr.Header().Get("content-type"))
 	assert.Equal(t, openapiDocument, rr.Body.String())
 }
