@@ -28,7 +28,7 @@ var openapiDocument = `
 	},
 	"servers": [
 		{
-			"url": "http://api.example.com/v1"
+			"url": "http://api.example.com/"
 		}
 	],
 	"paths": {
