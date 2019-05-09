@@ -3,6 +3,14 @@ apiVersion: v1
 kind: Service
 metadata:
   name: quote
+  annotations:
+    getambassador.io/config: |
+      ---
+      apiVersion: ambassador/v1
+      kind:  Mapping
+      name:  quote_api_service_mapping
+      prefix: /quote/
+      service: quote
 spec:
   type: NodePort
   ports:
@@ -30,7 +38,7 @@ spec:
     spec:
       containers:
         - name: quote-service-api
-          image: plombardi89/quote
+          image: quay.io/datawire/quote:latest
           imagePullPolicy: Always
           ports:
             - name: http-api

@@ -21,8 +21,8 @@ run: build
 
 build.image:
 	docker build \
-	-t plombardi89/qotm \
-	-t plombardi89/qotm:$(GIT_COMMIT) \
+	-t datawire/quote \
+	-t datawire/quote:$(GIT_COMMIT) \
 	-f Dockerfile \
 	.
 

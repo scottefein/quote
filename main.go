@@ -97,7 +97,7 @@ func (s *Server) ConfigureRouter() {
 	s.router.Get("/", s.GetQuote)
 	s.router.HandleFunc("/ws", s.StreamQuotes)
 
-	s.router.Get(getEnv(EnvOpenAPIPath, "/.well-known/openapi.yaml"), s.GetOpenAPIDocument)
+	s.router.Get(getEnv(EnvOpenAPIPath, "/.ambassador-internal/openapi-docs"), s.GetOpenAPIDocument)
 }
 
 func (s *Server) Start() error {
