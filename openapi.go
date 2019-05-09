@@ -21,8 +21,8 @@ import (
 var openapiDocument = `---
 openapi: 3.0.0
 info:
-  title: Obscure Quote Service API
-  description: The Obscure Quote Service API
+  title: Quote Service API
+  description: The Quote Service API
   version: dev
 
 servers:
