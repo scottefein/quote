@@ -33,6 +33,7 @@ const (
 	EnvPORT        = "PORT"
 	EnvHOST        = "HOST"
 	EnvOpenAPIPath = "OPENAPI_PATH"
+	EnvRPS         = "RPS"
 )
 
 type Server struct {
@@ -44,6 +45,7 @@ type Server struct {
 	hub      *Hub
 	random   *randomzeug.Random
 	quotes   []string
+	reqTimes []time.Time
 }
 
 type QuoteResult struct {
@@ -52,7 +54,33 @@ type QuoteResult struct {
 	Time   time.Time `json:"time"`
 }
 
+func (s *Server) GetRPS() int {
+	n := time.Now()
+
+	count := 0
+
+	for _, t := range s.reqTimes {
+		d := n.Sub(t)
+		if d.Seconds() <= 1 {
+			count += 1
+		}
+	}
+	return count
+}
+
 func (s *Server) GetQuote(w http.ResponseWriter, r *http.Request) {
+	if rpsString := os.Getenv(EnvRPS); rpsString != "" {
+		rps, err := strconv.Atoi(rpsString)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		s.reqTimes = append(s.reqTimes, time.Now())
+		if s.GetRPS() >= rps {
+			http.Error(w, "Request Overload", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	quote := s.random.RandomSelectionFromStringSlice(s.quotes)
 	res := QuoteResult{
 		Server: s.id,
