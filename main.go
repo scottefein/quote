@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -123,7 +124,12 @@ func (s *Server) HealthCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Debug(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.Header)
+	headers := "\nHEADERS:\n"
+	for h, v := range r.Header {
+		vals := strings.Join(v, ",")
+		headers += (h + ": " + vals + "\n")
+	}
+	log.Printf(headers)
 	w.WriteHeader(http.StatusOK)
 }
 
