@@ -14,17 +14,20 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/gorilla/websocket"
 	"github.com/plombardi89/gozeug/randomzeug"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -58,11 +61,13 @@ type QuoteResult struct {
 type DebugInfo struct {
 	Server     string              `json:"server"`
 	Time       time.Time           `json:"time"`
+	Method     string              `json:"method"`
 	Host       string              `json:"host"`
 	Proto      string              `json:"proto"`
 	URL        *url.URL            `json:"url"`
 	RemoteAddr string              `json:"remoteaddr"`
 	Headers    map[string][]string `json:"headers`
+	Body       string              `json:"body`
 }
 
 func (s *Server) GetRPS() int {
@@ -116,7 +121,12 @@ func (s *Server) GetQuote(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) StreamQuotes(w http.ResponseWriter, r *http.Request) {
-	conn, err := s.upgrader.Upgrade(w, r, nil)
+	hdr := make(map[string][]string)
+	val := make([]string, 1)
+	val[0] = "tour-cookie=ws"
+	hdr["set-cookie"] = val
+
+	conn, err := s.upgrader.Upgrade(w, r, http.Header(hdr))
 	if err != nil {
 		log.Println(err)
 		return
@@ -134,14 +144,24 @@ func (s *Server) HealthCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Debug(w http.ResponseWriter, r *http.Request) {
+	var bBytes []byte
+	if r.Body != nil {
+		bBytes, _ = ioutil.ReadAll(r.Body)
+		r.Body = ioutil.NopCloser(bytes.NewBuffer(bBytes))
+	}
+
+	bString := string(bBytes)
+
 	hdrs := DebugInfo{
 		Server:     s.id,
 		Time:       time.Now().UTC(),
+		Method:     r.Method,
 		Host:       r.Host,
 		Proto:      r.Proto,
 		URL:        r.URL,
 		RemoteAddr: r.RemoteAddr,
 		Headers:    r.Header,
+		Body:       bString,
 	}
 
 	hdrsJson, err := json.MarshalIndent(hdrs, "", "    ")
@@ -149,6 +169,13 @@ func (s *Server) Debug(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	}
+
+	log.Println(string(hdrsJson))
+
+	if strings.Compare(r.URL.Path, "/add_header") == 0 {
+		w.Header().Set("x-custom-header", "true")
+		w.Header().Set("set-cookie", "tour-cookie=REST")
 	}
 
 	w.Header().Set("content-type", "application/json")
@@ -166,7 +193,8 @@ func (s *Server) ConfigureRouter() {
 
 	s.router.Get("/", s.GetQuote)
 	s.router.Get("/get-quote/", s.GetQuote)
-	s.router.Get("/debug/", s.Debug)
+	s.router.Get("/debug/*", s.Debug)
+	s.router.Post("/debug/", s.Debug)
 	s.router.Get("/health", s.HealthCheck)
 	s.router.HandleFunc("/ws", s.StreamQuotes)
 
