@@ -152,7 +152,7 @@ func (s *Server) Debug(w http.ResponseWriter, r *http.Request) {
 
 	bString := string(bBytes)
 
-	hdrs := DebugInfo{
+	req := DebugInfo{
 		Server:     s.id,
 		Time:       time.Now().UTC(),
 		Method:     r.Method,
@@ -164,14 +164,14 @@ func (s *Server) Debug(w http.ResponseWriter, r *http.Request) {
 		Body:       bString,
 	}
 
-	hdrsJson, err := json.MarshalIndent(hdrs, "", "    ")
+	reqJson, err := json.MarshalIndent(req, "", "    ")
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	log.Println(string(hdrsJson))
+	log.Println(string(reqJson))
 
 	if strings.Compare(r.URL.Path, "/add_header") == 0 {
 		w.Header().Set("x-custom-header", "true")
@@ -181,7 +181,7 @@ func (s *Server) Debug(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	if _, err := w.Write(hdrsJson); err != nil {
+	if _, err := w.Write(reqJson); err != nil {
 		log.Panicln(err)
 	}
 }
@@ -195,6 +195,8 @@ func (s *Server) ConfigureRouter() {
 	s.router.Get("/get-quote/", s.GetQuote)
 	s.router.Get("/debug/*", s.Debug)
 	s.router.Post("/debug/", s.Debug)
+  s.router.Delete("/debug/", s.Debug)
+  s.router.Put("/debug/", s.Debug)
 	s.router.Get("/health", s.HealthCheck)
 	s.router.HandleFunc("/ws", s.StreamQuotes)
 
