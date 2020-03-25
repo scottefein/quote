@@ -24,13 +24,13 @@ run: build
 
 build.image:
 	docker build \
-	-t $(DOCKER_REPO):backend-$(TAG) \
+	-t $(DOCKER_REPO):$(TAG) \
 	-f Dockerfile \
 	.
 
 image.push: build.image
 	docker push \
-	$(DOCKER_REPO):backend-$(TAG)
+	$(DOCKER_REPO):$(TAG)
 
 clean:
 	rm -rf bin

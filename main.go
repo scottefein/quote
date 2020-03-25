@@ -26,8 +26,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 )
 
@@ -69,6 +71,89 @@ type DebugInfo struct {
 	Headers    map[string][]string `json:"headers`
 	Body       string              `json:"body`
 }
+
+var tmpl = template.Must(template.
+	New("logout.html").
+	Funcs(template.FuncMap{
+		"trimprefix": strings.TrimPrefix,
+	}).
+	Parse(`<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Demo logout microservice</title>
+	</head>
+	<body>
+		<fieldset><legend>SSR</legend>
+			{{ if eq (len .RealmCookies) 0 }}
+				<p>Not logged in to any realms.</p>
+			{{ else }}
+				<ul>{{ range .RealmCookies }}
+					<li>
+						<form method="POST" action="/.ambassador/oauth2/logout" target="_blank">
+							<input type="hidden" name="realm" value="{{ trimprefix .Name "ambassador_xsrf." }}" />
+							<input type="hidden" name="_xsrf" value="{{ .Value }}" />
+							<input type="submit" value="log out of realm {{ trimprefix .Name "ambassador_xsrf." }}" />
+						</form>
+					</li>
+				{{ end }}</ul>
+			{{ end }}
+		</fieldset>
+		<fieldset><legend>JS</legend>
+			{{ .JSApp }}
+		</fieldset>
+	</body>
+</html>
+`))
+
+const jsApp = `<div id="app">
+	<ul>
+		<li v-for="(val, key) in realmCookies">
+			<form method="POST" action="/.ambassador/oauth2/logout" target="_blank">
+				<input type="hidden" name="realm" v-bind:value="key.slice('ambassador_xsrf.'.length)" />
+				<input type="hidden" name="_xsrf" v-bind:value="val" />
+				<input type="submit" v-bind:value="'log out of realm '+key.slice('ambassador_xsrf.'.length)" />
+			</form>
+		</li>
+	</ul>
+</div>
+<script type="module">
+	import Vue from 'https://cdn.jsdelivr.net/npm/vue/dist/vue.esm.browser.js';
+
+	function getCookies() {
+		let map = {};
+		let list = decodeURIComponent(document.cookie).split(';');
+		for (let i = 0; i < list.length; i++) {
+			let cookie = list[i].trimStart();
+			let eq = cookie.indexOf('=');
+			let key = cookie.slice(0, eq);
+			let val = cookie.slice(eq+1);
+			map[key] = val;
+		}
+		return map;
+	}
+
+	new Vue({
+		el: '#app',
+		data: function() {
+			return {
+				"cookies": getCookies(),
+			};
+		},
+		computed: {
+			"realmCookies": function() {
+				let ret = {};
+				for (let key in this.cookies) {
+					if (key.indexOf("ambassador_xsrf.") == 0) {
+						ret[key] = this.cookies[key];
+					}
+				}
+				return ret;
+			},
+		},
+	});
+</script>
+`
 
 func (s *Server) GetRPS() int {
 	n := time.Now()
@@ -123,7 +208,7 @@ func (s *Server) GetQuote(w http.ResponseWriter, r *http.Request) {
 func (s *Server) StreamQuotes(w http.ResponseWriter, r *http.Request) {
 	hdr := make(map[string][]string)
 	val := make([]string, 1)
-	val[0] = "tour-cookie=ws"
+	val[0] = "quote-cookie=ws"
 	hdr["set-cookie"] = val
 
 	conn, err := s.upgrader.Upgrade(w, r, http.Header(hdr))
@@ -175,7 +260,7 @@ func (s *Server) Debug(w http.ResponseWriter, r *http.Request) {
 
 	if strings.Compare(r.URL.Path, "/add_header") == 0 {
 		w.Header().Set("x-custom-header", "true")
-		w.Header().Set("set-cookie", "tour-cookie=REST")
+		w.Header().Set("set-cookie", "quote-cookie=REST")
 	}
 
 	w.Header().Set("content-type", "application/json")
@@ -186,17 +271,38 @@ func (s *Server) Debug(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
+	var realmCookies []*http.Cookie
+	for _, cookie := range r.Cookies() {
+		if strings.HasPrefix(cookie.Name, "ambassador_xsrf.") {
+			realmCookies = append(realmCookies, cookie)
+		}
+	}
+	sort.Slice(realmCookies, func(i, j int) bool {
+		return realmCookies[i].Name < realmCookies[j].Name
+	})
+	w.Header().Set("Content-Type", "text/html; text/html; charset=utf-8")
+	tmpl.Execute(w, map[string]interface{}{
+		"RealmCookies": realmCookies,
+		"JSApp":        jsApp,
+	})
+}
+
 func (s *Server) ConfigureRouter() {
 	s.router.Use(middleware.Recoverer)
 	s.router.Use(middleware.RequestID)
 	s.router.Use(middleware.RealIP)
 
 	s.router.Get("/", s.GetQuote)
+	s.router.Head("/", s.GetQuote)
 	s.router.Get("/get-quote/", s.GetQuote)
 	s.router.Get("/debug/*", s.Debug)
 	s.router.Post("/debug/", s.Debug)
-  s.router.Delete("/debug/", s.Debug)
-  s.router.Put("/debug/", s.Debug)
+	s.router.Post("/health", s.HealthCheck)
+	s.router.Delete("/debug/", s.Debug)
+	s.router.Put("/debug/", s.Debug)
+	s.router.Options("/debug/*", s.Debug)
+	s.router.Get("/logout", s.Logout)
 	s.router.Get("/health", s.HealthCheck)
 	s.router.HandleFunc("/ws", s.StreamQuotes)
 
