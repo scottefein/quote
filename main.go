@@ -35,6 +35,8 @@ import (
 
 var port = 8080
 
+var authCount = 0
+
 const (
 	EnvPORT        = "PORT"
 	EnvHOST        = "HOST"
@@ -228,6 +230,16 @@ func (s *Server) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func (S *Server) TestAuth(w http.ResponseWriter, r *http.Request) {
+	if authCount > 0 {
+		w.WriteHeader(http.StatusOK)
+		authCount = 0
+		return
+	}
+	w.WriteHeader(http.StatusInternalServerError)
+	authCount++
+}
+
 func (s *Server) Debug(w http.ResponseWriter, r *http.Request) {
 	var bBytes []byte
 	if r.Body != nil {
@@ -297,6 +309,7 @@ func (s *Server) ConfigureRouter() {
 	s.router.Head("/", s.GetQuote)
 	s.router.Get("/get-quote/", s.GetQuote)
 	s.router.Get("/debug/*", s.Debug)
+	s.router.Get("/auth/*", s.TestAuth)
 	s.router.Post("/debug/", s.Debug)
 	s.router.Post("/health", s.HealthCheck)
 	s.router.Delete("/debug/", s.Debug)
