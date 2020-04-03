@@ -1,9 +1,11 @@
 # The (Obscure) Quote of the Moment Service
 
-Minimal web service that is useful for experiments, tests, and demos. It is inspired by the 
-[Datawire Quote of the Moment](https://github.com/datawire/qotm) service (which I also wrote years ago) but now 
-rewritten in Go and with a slightly different API.
+This is a long-lived branch of the [quote service](https://github.com/datawire/quote) for use in the tour application.
 
-# License
+This branch is pulled into [datawire/tour](https://github.com/datawire/tour) as the `backend/` directory via a `git subtree`.
 
-Licensed as Apache 2.0. Please read [LICENSE](LICENSE) for complete details.
+All updates to the tour backend should be made against the [tour-master](https://github.com/datawire/quote/tree/tour-master) branch of [datawire/quote](https://github.com/datawire/quote) and pulled into tour by running:
+
+```
+git subtree pull --prefix backend https://github.com/datawire/quote tour-master --squash
+```

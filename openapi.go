@@ -53,6 +53,32 @@ var openapiDocument = `
 					}
 				}
 			}
+		},
+		"/debug/": {
+			"get": {
+				"summary": "Return debug information about the request.",
+				"responses": {
+					"200": {
+						"description": "A JSON object with debug information about the request and additional metadata.",
+						"content": {
+							"application/json" : {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"server": {"type": "string"},
+										"time": {"type": "string"},
+										"host": {"type": "string"},
+										"proto": {"type": "string"},
+										"url":  {"type": "object"},
+										"remoteaddr": {"type": "string"},
+										"headers": {"type": "object"}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 }

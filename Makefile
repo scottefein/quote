@@ -8,7 +8,10 @@ GOBUILD = go build -o bin/$(BINARY_BASENAME)-$(GOOS)-$(GOARCH)
 
 BINARY_BASENAME=qotm
 
-.PHONY: all build build.image clean fmt run test.fast
+DOCKER_REPO ?= localhost:31000/tour
+TAG ?= latest
+
+.PHONY: all build build.image image.push clean fmt run test.fast
 
 all: clean fmt test.fast build
 
@@ -21,10 +24,13 @@ run: build
 
 build.image:
 	docker build \
-	-t datawire/quote \
-	-t datawire/quote:$(GIT_COMMIT) \
+	-t $(DOCKER_REPO):$(TAG) \
 	-f Dockerfile \
 	.
+
+image.push: build.image
+	docker push \
+	$(DOCKER_REPO):$(TAG)
 
 clean:
 	rm -rf bin
