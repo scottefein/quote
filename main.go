@@ -26,9 +26,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/template"
 	"time"
 )
@@ -54,6 +56,7 @@ type Server struct {
 	random   *randomzeug.Random
 	quotes   []string
 	reqTimes []time.Time
+	ready    bool
 }
 
 type QuoteResult struct {
@@ -227,7 +230,47 @@ func (s *Server) StreamQuotes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) HealthCheck(w http.ResponseWriter, r *http.Request) {
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM)
+
+	go func(r *bool) {
+		sig := <-sigs
+		*r = false
+		fmt.Printf("sig: %v received. Exiting...\n", sig)
+		time.Sleep(time.Duration(5) * time.Second)
+		os.Exit(0)
+	}(&s.ready)
+
+	if s.ready {
+		w.Write([]byte("OK"))
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) Sleep(w http.ResponseWriter, r *http.Request) {
+	sleepTime := 1
+
+	sleeps, ok := r.URL.Query()["sleep"]
+
+	if !ok || len(sleeps[0]) < 1 {
+		log.Println("Sleep parameter is missing. Using default 1 second.")
+	} else {
+		var err error
+		sleepTime, err = strconv.Atoi(sleeps[0])
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("400: Sleep param is not an integer"))
+			return
+		}
+	}
+
+	time.Sleep((time.Duration(sleepTime) * time.Second))
+
 	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("200: OK\n"))
 }
 
 func (S *Server) TestAuth(w http.ResponseWriter, r *http.Request) {
@@ -315,6 +358,7 @@ func (s *Server) ConfigureRouter() {
 	s.router.Delete("/debug/", s.Debug)
 	s.router.Put("/debug/", s.Debug)
 	s.router.Options("/debug/*", s.Debug)
+	s.router.Get("/sleep/*", s.Sleep)
 	s.router.Get("/logout", s.Logout)
 	s.router.Get("/health", s.HealthCheck)
 	s.router.HandleFunc("/ws", s.StreamQuotes)
@@ -373,6 +417,7 @@ func main() {
 		},
 		random: random,
 		quotes: startingQuotes,
+		ready:  true,
 	}
 
 	s.ConfigureRouter()
