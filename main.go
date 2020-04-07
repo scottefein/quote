@@ -230,18 +230,6 @@ func (s *Server) StreamQuotes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) HealthCheck(w http.ResponseWriter, r *http.Request) {
-
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGTERM)
-
-	go func(r *bool) {
-		sig := <-sigs
-		*r = false
-		fmt.Printf("sig: %v received. Exiting...\n", sig)
-		time.Sleep(time.Duration(5) * time.Second)
-		os.Exit(0)
-	}(&s.ready)
-
 	if s.ready {
 		w.Write([]byte("OK"))
 	} else {
@@ -421,6 +409,16 @@ func main() {
 	}
 
 	s.ConfigureRouter()
+
+	// Handle SIGTERM gracefully
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGTERM)
+
+	go func(r *bool) {
+		<-signals
+		*r = false
+		fmt.Printf("SIGTERM received. Marked unhealthy and waiting to be killed.\n")
+	}(&s.ready)
 
 	log.Fatalln(s.Start())
 }
