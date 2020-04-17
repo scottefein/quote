@@ -257,8 +257,16 @@ func (s *Server) Sleep(w http.ResponseWriter, r *http.Request) {
 
 	time.Sleep((time.Duration(sleepTime) * time.Second))
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("200: OK\n"))
+	if s.ready {
+		log.Printf("Slept %d seconds\n", sleepTime)
+		//w.WriteHeader(http.StatusCreated)
+		w.Write([]byte("200: OK\n"))
+	} else {
+		log.Printf("Error: Not ready. Should not have gotten request\n")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("503: Terminating\n"))
+	}
+
 }
 
 func (S *Server) TestAuth(w http.ResponseWriter, r *http.Request) {
