@@ -42,6 +42,7 @@ var authCount = 0
 const (
 	EnvPORT        = "PORT"
 	EnvHOST        = "HOST"
+	EnvTLS         = "ENABLE_TLS"
 	EnvOpenAPIPath = "OPENAPI_PATH"
 	EnvRPS         = "RPS"
 )
@@ -50,6 +51,7 @@ type Server struct {
 	id       string
 	host     string
 	port     int
+	tls      bool
 	router   *chi.Mux
 	upgrader websocket.Upgrader
 	hub      *Hub
@@ -368,21 +370,28 @@ func (s *Server) Start() error {
 
 	listenAddr := fmt.Sprintf("%s:%d", s.host, s.port)
 	log.Printf("listening on %s\n", listenAddr)
+	if s.tls {
+		return http.ListenAndServeTLS(listenAddr, "/certs/cert.pem", "/certs/key.pem", s.router)
+	}
 	return http.ListenAndServe(listenAddr, s.router)
 }
 
 func main() {
-	if portString := os.Getenv(EnvPORT); portString != "" {
-		p, err := strconv.Atoi(portString)
-		if err != nil {
-			log.Fatalln(err)
-		}
+	tls, err := strconv.ParseBool(getEnv(EnvTLS, "false"))
+	if err != nil {
+		log.Println("ERROR: ENABLE_HTTPS environment variable must be either 'true' or 'false'.")
+	}
+	defPort := "8080"
+	if tls {
+		defPort = "8443"
+	}
+	port, err := strconv.Atoi(getEnv(EnvPORT, defPort))
+	if err != nil {
+		log.Fatalln(err)
+	}
 
-		if p < 1 || p > 65535 {
-			log.Fatalln("Server port must be in range 1..65535 (inclusive)")
-		}
-
-		port = p
+	if port < 1 || port > 65535 {
+		log.Fatalln("Server port must be in range 1..65535 (inclusive)")
 	}
 
 	startingQuotes := []string{
@@ -403,6 +412,7 @@ func main() {
 		id:     generateServerID(random),
 		host:   os.Getenv(EnvHOST),
 		port:   port,
+		tls:    tls,
 		router: chi.NewRouter(),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {

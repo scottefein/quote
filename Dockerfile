@@ -17,6 +17,7 @@ FROM golang:1.12 as foundation
 WORKDIR /build
 COPY go.mod .
 COPY go.sum .
+COPY certs certs
 RUN go mod download
 
 FROM foundation as builder
@@ -27,5 +28,6 @@ RUN make
 FROM gcr.io/distroless/base as runtime
 
 COPY --from=builder /build/bin/qotm-linux-amd64 /bin/qotm
+COPY --from=builder /build/certs /certs
 
 ENTRYPOINT ["/bin/qotm"]
