@@ -384,7 +384,8 @@ func (s *Server) ConfigureRouter() {
 
 		tracer, err := buildTracer(zipkinEndpoint)
 		if err != nil {
-			log.Println(err)
+			log.Println("Could not build Zipkin Tracer: " , err)
+			log.Println("Zipkin traces disabled, check environment variables. Continuing...")
 		} else {
 			s.router.Use(
 				zipkinhttp.NewServerMiddleware(
