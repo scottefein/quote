@@ -49,7 +49,7 @@ const (
 	EnvTLS         = "ENABLE_TLS"
 	EnvOpenAPIPath = "OPENAPI_PATH"
 	EnvRPS         = "RPS"
-	EnvZipkin	   = "ZIPKIN_SERVER"
+	EnvZipkin      = "ZIPKIN_SERVER"
 	EnvZipkinPort  = "ZIPKIN_PORT"
 	EnvDebugZipkin = "ZIPKIN_DEBUG"
 )
@@ -174,7 +174,7 @@ func buildTracer(zipkinEndpoint string) (*zipkin.Tracer, error) {
 	localEndpoint := &model.Endpoint{ServiceName: "quote", Port: 8080}
 	sampler, err := zipkin.NewCountingSampler(1)
 	if err != nil {
-		log.Fatalln(err)
+		log.Println(err)
 		return nil, err
 	}
 	tracer, err := zipkin.NewTracer(
@@ -183,7 +183,7 @@ func buildTracer(zipkinEndpoint string) (*zipkin.Tracer, error) {
 		zipkin.WithLocalEndpoint(localEndpoint),
 	)
 	if err != nil {
-		log.Fatalln(err)
+		log.Println(err)
 		return nil, err
 	}
  
@@ -377,14 +377,14 @@ func (s *Server) ConfigureRouter() {
 		defZipkinPort := "9411"
 		zipkinPort, err := strconv.Atoi(getEnv(EnvZipkinPort, defZipkinPort))
 		if err != nil {
-			log.Fatalln(err)
+			log.Println(err)
 		}
 
 		zipkinEndpoint := fmt.Sprintf("%s%s%s%d%s", "http://", zipkinServer, ":", zipkinPort, "/api/v2/spans")
 
 		tracer, err := buildTracer(zipkinEndpoint)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		} else {
 			s.router.Use(
 				zipkinhttp.NewServerMiddleware(
