@@ -21,6 +21,10 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/gorilla/websocket"
 	"github.com/plombardi89/gozeug/randomzeug"
+	"github.com/openzipkin/zipkin-go"
+	"github.com/openzipkin/zipkin-go/model"
+	zipkinhttp "github.com/openzipkin/zipkin-go/middleware/http"
+	reporterhttp "github.com/openzipkin/zipkin-go/reporter/http"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -45,6 +49,9 @@ const (
 	EnvTLS         = "ENABLE_TLS"
 	EnvOpenAPIPath = "OPENAPI_PATH"
 	EnvRPS         = "RPS"
+	EnvZipkin      = "ZIPKIN_SERVER"
+	EnvZipkinPort  = "ZIPKIN_PORT"
+	EnvDebugZipkin = "ZIPKIN_DEBUG"
 )
 
 type Server struct {
@@ -161,6 +168,27 @@ const jsApp = `<div id="app">
 	});
 </script>
 `
+
+func buildTracer(zipkinEndpoint string) (*zipkin.Tracer, error) {
+	reporter := reporterhttp.NewReporter(zipkinEndpoint)
+	localEndpoint := &model.Endpoint{ServiceName: "quote", Port: 8080}
+	sampler, err := zipkin.NewCountingSampler(1)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	tracer, err := zipkin.NewTracer(
+		reporter,
+		zipkin.WithSampler(sampler),
+		zipkin.WithLocalEndpoint(localEndpoint),
+	)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+ 
+	return tracer, err
+}
 
 func (s *Server) GetRPS() int {
 	n := time.Now()
@@ -342,6 +370,31 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ConfigureRouter() {
+
+	// Optional zipkin integration. Must set env variables for the code to run
+	if zipkinServer := os.Getenv(EnvZipkin); zipkinServer != "" {
+	
+		defZipkinPort := "9411"
+		zipkinPort, err := strconv.Atoi(getEnv(EnvZipkinPort, defZipkinPort))
+		if err != nil {
+			log.Println(err)
+		}
+
+		zipkinEndpoint := fmt.Sprintf("%s%s%s%d%s", "http://", zipkinServer, ":", zipkinPort, "/api/v2/spans")
+
+		tracer, err := buildTracer(zipkinEndpoint)
+		if err != nil {
+			log.Println("Could not build Zipkin Tracer: " , err)
+			log.Println("Zipkin traces disabled, check environment variables. Continuing...")
+		} else {
+			s.router.Use(
+				zipkinhttp.NewServerMiddleware(
+					tracer,
+					zipkinhttp.SpanName("quote_request_span")),
+			)
+		}
+	}
+
 	s.router.Use(middleware.Recoverer)
 	s.router.Use(middleware.RequestID)
 	s.router.Use(middleware.RealIP)
