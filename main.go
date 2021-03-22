@@ -52,6 +52,9 @@ const (
 	EnvZipkin      = "ZIPKIN_SERVER"
 	EnvZipkinPort  = "ZIPKIN_PORT"
 	EnvDebugZipkin = "ZIPKIN_DEBUG"
+	EnvConsulIP    = "CONSUL_IP"        // The IP of the Consul Pod                           #OPTIONAL - Consul Integration
+	EnvPodIP       = "POD_IP"			// The IP of this pod                                 #OPTIONAL - Consul Integration
+	EnvServiceName = "SERVICE_NAME"     // The Name of the service (default: quote-consul)    #OPTIONAL - Consul Integration
 )
 
 type Server struct {
@@ -84,6 +87,21 @@ type DebugInfo struct {
 	RemoteAddr string              `json:"remoteaddr"`
 	Headers    map[string][]string `json:"headers`
 	Body       string              `json:"body`
+}
+
+// Health check component of the ConsulPayload struct
+type HealthCheck struct {
+	HTTP	  string     `json:"HTTP"`
+	Dereg	  string     `json:"DeregisterCriticalServiceAfter"`
+	Interval  string	 `json:"Interval"`
+}
+
+// information for registering with consul
+type ConsulPayload struct {
+	Name          string      `json:"Name"`
+	Address       string      `json:"Address"`
+	Port          int         `json:"Port"`
+	HealthCheck	  HealthCheck `json:"Check"`
 }
 
 var tmpl = template.Must(template.
@@ -189,6 +207,89 @@ func buildTracer(zipkinEndpoint string) (*zipkin.Tracer, error) {
  
 	return tracer, err
 }
+
+
+// Registers this service with Consul if the environment variables are present
+func RegisterConsul(quotePort int) {
+
+	// Check if our environment variables for this function are set
+	consulIP := os.Getenv(EnvConsulIP)
+	if consulIP == "" {
+		log.Println("CONSUL_IP environment variable not found, continuing without Consul registration")
+		return
+	}
+	podIP := os.Getenv(EnvPodIP)
+	if podIP == "" {
+		log.Println("POD_IP environment variable (this pod's IP) not found, continuing without Consul registration")
+		return
+	}
+
+	svcName := getEnv(EnvServiceName, "quote-consul")
+	if svcName == "" {
+		log.Println("SERVICE_NAME environment variable (quote service) not found, continuing with default service name \"quote-consul\"")
+		log.Println("SERVICE_NAME required if not using default service name, add this if you are seeing \"no healthy upstream\" or 503 errors")
+	}
+
+	log.Println("Beginning Consul Service registration...")
+
+	consulUrl := fmt.Sprintf("%s%s%s", "http://", consulIP, ":8500/v1/agent/service/register")
+	log.Println("Consul service registration URL: ", consulUrl)
+
+
+	healthCheckUrl := fmt.Sprintf("%s%s%s%d%s", "http://", podIP, ":", quotePort, "/health")
+	log.Println("Health check URL:", healthCheckUrl)
+
+	// Part of the JSON payload we are creating below to register the service with Consul
+	healthCheck :=HealthCheck{
+		HTTP: healthCheckUrl,
+		Dereg: "1m",
+		Interval: "30s",
+	}
+	payload := ConsulPayload{
+		Name: svcName,
+		Address: podIP,
+		Port: quotePort,
+		HealthCheck: healthCheck,
+	}
+
+	log.Println("Service registration payload: " , payload)
+
+	// Marshal the payload to JSON
+	payloadJson, err := json.MarshalIndent(payload, "", "    ")
+	if err != nil {
+        log.Println("Error generating Consul registration payload JSON: " , err)
+		return
+    }
+
+	// Setup Http client to make request
+	requesterClient := &http.Client{}
+
+	// Method is put, and the body is our marshaled JSON in bytes
+	consulRequest, err := http.NewRequest(http.MethodPut, consulUrl, bytes.NewBuffer(payloadJson))
+	if err != nil {
+		log.Println("Error building Consul request: " , err)
+		return
+	}
+
+    // Set header and Make the request
+    consulRequest.Header.Set("Content-Type", "application/json; charset=utf-8")
+    consulResponse, err := requesterClient.Do(consulRequest)
+    if err != nil {
+        log.Println("Error submitting request to Consul: " , err)
+		return
+    }
+
+    log.Println("Consul response code: ", consulResponse.StatusCode)
+	if consulResponse.StatusCode != 200 {
+		log.Println("Error in response from Consul service not registered successfully")
+		return
+	}
+
+	successMsg := fmt.Sprintf("%s%s%s%s", "Successfully registered service:", svcName, "to Consul with IP:", podIP)
+	log.Println(successMsg)
+	return
+}
+
 
 func (s *Server) GetRPS() int {
 	n := time.Now()
@@ -478,6 +579,9 @@ func main() {
 		quotes: startingQuotes,
 		ready:  true,
 	}
+
+	// Check for Consul integration & register the service with Consul
+	RegisterConsul(s.port)
 
 	s.ConfigureRouter()
 
