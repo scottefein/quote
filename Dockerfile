@@ -18,6 +18,7 @@ WORKDIR /build
 COPY go.mod .
 COPY go.sum .
 COPY certs certs
+COPY images images
 RUN go mod download
 
 FROM foundation as builder
@@ -29,5 +30,6 @@ FROM gcr.io/distroless/base as runtime
 
 COPY --from=builder /build/bin/qotm-linux-amd64 /bin/qotm
 COPY --from=builder /build/certs /certs
+COPY --from=builder /build/images /images
 
 ENTRYPOINT ["/bin/qotm"]

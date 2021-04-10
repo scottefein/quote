@@ -17,26 +17,28 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
-	"github.com/gorilla/websocket"
-	"github.com/plombardi89/gozeug/randomzeug"
-	"github.com/openzipkin/zipkin-go"
-	"github.com/openzipkin/zipkin-go/model"
-	zipkinhttp "github.com/openzipkin/zipkin-go/middleware/http"
-	reporterhttp "github.com/openzipkin/zipkin-go/reporter/http"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"syscall"
 	"text/template"
 	"time"
+
+	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
+	"github.com/gorilla/websocket"
+	"github.com/openzipkin/zipkin-go"
+	zipkinhttp "github.com/openzipkin/zipkin-go/middleware/http"
+	"github.com/openzipkin/zipkin-go/model"
+	reporterhttp "github.com/openzipkin/zipkin-go/reporter/http"
+	"github.com/plombardi89/gozeug/randomzeug"
 )
 
 var port = 8080
@@ -52,9 +54,9 @@ const (
 	EnvZipkin      = "ZIPKIN_SERVER"
 	EnvZipkinPort  = "ZIPKIN_PORT"
 	EnvDebugZipkin = "ZIPKIN_DEBUG"
-	EnvConsulIP    = "CONSUL_IP"        // The IP of the Consul Pod                           #OPTIONAL - Consul Integration
-	EnvPodIP       = "POD_IP"			// The IP of this pod                                 #OPTIONAL - Consul Integration
-	EnvServiceName = "SERVICE_NAME"     // The Name of the service (default: quote-consul)    #OPTIONAL - Consul Integration
+	EnvConsulIP    = "CONSUL_IP"    // The IP of the Consul Pod                           #OPTIONAL - Consul Integration
+	EnvPodIP       = "POD_IP"       // The IP of this pod                                 #OPTIONAL - Consul Integration
+	EnvServiceName = "SERVICE_NAME" // The Name of the service (default: quote-consul)    #OPTIONAL - Consul Integration
 )
 
 type Server struct {
@@ -91,17 +93,21 @@ type DebugInfo struct {
 
 // Health check component of the ConsulPayload struct
 type HealthCheck struct {
-	HTTP	  string     `json:"HTTP"`
-	Dereg	  string     `json:"DeregisterCriticalServiceAfter"`
-	Interval  string	 `json:"Interval"`
+	HTTP     string `json:"HTTP"`
+	Dereg    string `json:"DeregisterCriticalServiceAfter"`
+	Interval string `json:"Interval"`
 }
 
 // information for registering with consul
 type ConsulPayload struct {
-	Name          string      `json:"Name"`
-	Address       string      `json:"Address"`
-	Port          int         `json:"Port"`
-	HealthCheck	  HealthCheck `json:"Check"`
+	Name        string      `json:"Name"`
+	Address     string      `json:"Address"`
+	Port        int         `json:"Port"`
+	HealthCheck HealthCheck `json:"Check"`
+}
+
+type FileList struct {
+	FileList []string `json:"FileList"`
 }
 
 var tmpl = template.Must(template.
@@ -204,10 +210,9 @@ func buildTracer(zipkinEndpoint string) (*zipkin.Tracer, error) {
 		log.Println(err)
 		return nil, err
 	}
- 
+
 	return tracer, err
 }
-
 
 // Registers this service with Consul if the environment variables are present
 func RegisterConsul(quotePort int) {
@@ -235,31 +240,30 @@ func RegisterConsul(quotePort int) {
 	consulUrl := fmt.Sprintf("%s%s%s", "http://", consulIP, ":8500/v1/agent/service/register")
 	log.Println("Consul service registration URL: ", consulUrl)
 
-
 	healthCheckUrl := fmt.Sprintf("%s%s%s%d%s", "http://", podIP, ":", quotePort, "/health")
 	log.Println("Health check URL:", healthCheckUrl)
 
 	// Part of the JSON payload we are creating below to register the service with Consul
-	healthCheck :=HealthCheck{
-		HTTP: healthCheckUrl,
-		Dereg: "1m",
+	healthCheck := HealthCheck{
+		HTTP:     healthCheckUrl,
+		Dereg:    "1m",
 		Interval: "30s",
 	}
 	payload := ConsulPayload{
-		Name: svcName,
-		Address: podIP,
-		Port: quotePort,
+		Name:        svcName,
+		Address:     podIP,
+		Port:        quotePort,
 		HealthCheck: healthCheck,
 	}
 
-	log.Println("Service registration payload: " , payload)
+	log.Println("Service registration payload: ", payload)
 
 	// Marshal the payload to JSON
 	payloadJson, err := json.MarshalIndent(payload, "", "    ")
 	if err != nil {
-        log.Println("Error generating Consul registration payload JSON: " , err)
+		log.Println("Error generating Consul registration payload JSON: ", err)
 		return
-    }
+	}
 
 	// Setup Http client to make request
 	requesterClient := &http.Client{}
@@ -267,19 +271,19 @@ func RegisterConsul(quotePort int) {
 	// Method is put, and the body is our marshaled JSON in bytes
 	consulRequest, err := http.NewRequest(http.MethodPut, consulUrl, bytes.NewBuffer(payloadJson))
 	if err != nil {
-		log.Println("Error building Consul request: " , err)
+		log.Println("Error building Consul request: ", err)
 		return
 	}
 
-    // Set header and Make the request
-    consulRequest.Header.Set("Content-Type", "application/json; charset=utf-8")
-    consulResponse, err := requesterClient.Do(consulRequest)
-    if err != nil {
-        log.Println("Error submitting request to Consul: " , err)
+	// Set header and Make the request
+	consulRequest.Header.Set("Content-Type", "application/json; charset=utf-8")
+	consulResponse, err := requesterClient.Do(consulRequest)
+	if err != nil {
+		log.Println("Error submitting request to Consul: ", err)
 		return
-    }
+	}
 
-    log.Println("Consul response code: ", consulResponse.StatusCode)
+	log.Println("Consul response code: ", consulResponse.StatusCode)
 	if consulResponse.StatusCode != 200 {
 		log.Println("Error in response from Consul service not registered successfully")
 		return
@@ -289,7 +293,6 @@ func RegisterConsul(quotePort int) {
 	log.Println(successMsg)
 	return
 }
-
 
 func (s *Server) GetRPS() int {
 	n := time.Now()
@@ -470,11 +473,60 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) Upload(w http.ResponseWriter, r *http.Request) {
+	log.Println("Uploading File...")
+}
+
+func (s *Server) Download(w http.ResponseWriter, r *http.Request) {
+	log.Println("Downloading File...")
+}
+
+func (s *Server) ListFiles(w http.ResponseWriter, r *http.Request) {
+	log.Println("Listing Files...")
+	// we ship with edgy.jpeg
+	files := []string{"edgy.jpeg"}
+
+	_, err := os.Stat("/mnt/files/quote/")
+	if !os.IsNotExist(err) {
+		err := filepath.Walk("/mnt/files/quote/", func(path string, info os.FileInfo, err error) error {
+			if !info.IsDir() {
+				file := filepath.Base(path)
+				files = append(files, file)
+			}
+			return nil
+		})
+		if err != nil {
+			log.Println("Error reading files from mounted directory")
+		}
+	}
+
+	payload := FileList{
+		FileList: files,
+	}
+
+	log.Println("File list payload:", payload)
+
+	// Marshal the payload to JSON
+	payloadJson, err := json.MarshalIndent(payload, "", "    ")
+	if err != nil {
+		log.Println("Error generating file list payload JSON: ", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(payloadJson); err != nil {
+		log.Panicln(err)
+	}
+
+}
+
 func (s *Server) ConfigureRouter() {
 
 	// Optional zipkin integration. Must set env variables for the code to run
 	if zipkinServer := os.Getenv(EnvZipkin); zipkinServer != "" {
-	
+
 		defZipkinPort := "9411"
 		zipkinPort, err := strconv.Atoi(getEnv(EnvZipkinPort, defZipkinPort))
 		if err != nil {
@@ -485,7 +537,7 @@ func (s *Server) ConfigureRouter() {
 
 		tracer, err := buildTracer(zipkinEndpoint)
 		if err != nil {
-			log.Println("Could not build Zipkin Tracer: " , err)
+			log.Println("Could not build Zipkin Tracer: ", err)
 			log.Println("Zipkin traces disabled, check environment variables. Continuing...")
 		} else {
 			s.router.Use(
@@ -514,6 +566,22 @@ func (s *Server) ConfigureRouter() {
 	s.router.Get("/logout", s.Logout)
 	s.router.Get("/health", s.HealthCheck)
 	s.router.HandleFunc("/ws", s.StreamQuotes)
+
+	// These two endpoints can be enabled without a volume claim since we will serve a image that ships with the container
+	s.router.Get("/files/", s.ListFiles)
+	s.router.Get("/files/*", s.Download)
+
+	// File uploading endpoints require a check to see if a volume is mounted
+	defaultFolder, err := os.Stat("/images/")
+	if !os.IsNotExist(err) {
+		log.Println("Found default directory: ", defaultFolder)
+		log.Println("enabling file upload endpoints")
+
+		s.router.Put("/files/*", s.Upload)
+		s.router.Post("/files/*", s.Upload)
+	} else {
+		log.Println("Default directory not detected, disabling file upload endpoints")
+	}
 
 	s.router.Get(getEnv(EnvOpenAPIPath, "/.ambassador-internal/openapi-docs"), s.GetOpenAPIDocument)
 }
