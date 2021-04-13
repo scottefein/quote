@@ -17,12 +17,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -57,6 +59,7 @@ const (
 	EnvConsulIP    = "CONSUL_IP"    // The IP of the Consul Pod                           #OPTIONAL - Consul Integration
 	EnvPodIP       = "POD_IP"       // The IP of this pod                                 #OPTIONAL - Consul Integration
 	EnvServiceName = "SERVICE_NAME" // The Name of the service (default: quote-consul)    #OPTIONAL - Consul Integration
+	EnvFilePath    = "FILE_PATH"    // The path where files will be stored				  #OPTIONAL - defaults to storing images in the container /images/ folder
 )
 
 type Server struct {
@@ -473,22 +476,140 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func GetFileContentType(out *os.File) (string, error) {
+
+	// Only the first 512 bytes are used to sniff the content type.
+	buffer := make([]byte, 512)
+
+	_, err := out.Read(buffer)
+	if err != nil {
+		return "", err
+	}
+
+	// Use the net/http package's handy DectectContentType function. Always returns a valid
+	// content-type by returning "application/octet-stream" if no others seemed to match.
+	contentType := http.DetectContentType(buffer)
+
+	return contentType, nil
+}
+
 func (s *Server) Upload(w http.ResponseWriter, r *http.Request) {
 	log.Println("Uploading File...")
+
+	envFilePath := os.Getenv(EnvFilePath)
+	if envFilePath == "" {
+		envFilePath = "/images/"
+	}
+
+	io.WriteString(w, "Upload files\n")
+
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		log.Println("ERROR: Could not find file in client upload request: ", err)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Header().Set("Content-Type", "text/html; text/html; charset=utf-8")
+		w.Write([]byte("Unable to read file from request"))
+		return
+	}
+	defer file.Close()
+
+	// Cant overwrite edgy.jpg
+	if handler.Filename == "edgy.jpeg" {
+		log.Println("ERROR: Client tried to overwrite dummy file: ")
+		w.WriteHeader(http.StatusForbidden)
+		w.Header().Set("Content-Type", "text/html; text/html; charset=utf-8")
+		w.Write([]byte("Sorry, you can't overwrite edgy.jpg"))
+		return
+	}
+
+	// build the path for saving the file
+	filePath := fmt.Sprintf("%s%s", envFilePath, handler.Filename)
+	log.Println("Saving uploaded file to path: ", filePath)
+
+	// copy example
+	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		log.Println("ERROR: Could not write file from client: ", filePath)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "text/html; text/html; charset=utf-8")
+		w.Write([]byte("Error saving file to local storage"))
+		return
+	}
+	defer f.Close()
+	io.Copy(f, file)
+	log.Println("SUCCESS, file uploaded to path: ", filePath)
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html; text/html; charset=utf-8")
+	w.Write([]byte("File uploaded successfully"))
 }
 
 func (s *Server) Download(w http.ResponseWriter, r *http.Request) {
-	log.Println("Downloading File...")
+
+	envFilePath := os.Getenv(EnvFilePath)
+	if envFilePath == "" {
+		envFilePath = "/images/"
+	}
+
+	fileName := path.Base(r.URL.Path)
+	filePath := fmt.Sprintf("%s%s", envFilePath, fileName)
+
+	// check if they want edgy and overwrite the filepath
+	if fileName == "edgy.jpeg" {
+		filePath = "/images/edgy.jpeg"
+	}
+
+	// Open the File
+	f, err := os.Open(filePath)
+	if err != nil {
+		log.Println("ERROR: Client requested file not found: ", filePath)
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-Type", "text/html; text/html; charset=utf-8")
+		w.Write([]byte("Could not find file locally"))
+		return
+	}
+	defer f.Close()
+
+	// Set up a buffer for the header of the file from the first 512 bytes
+	FileHeader := make([]byte, 512)
+
+	// Grab info about the file to send to the client
+	f.Read(FileHeader)
+	FileContentType := http.DetectContentType(FileHeader)
+	FileStat, _ := f.Stat()
+	FileSize := strconv.FormatInt(FileStat.Size(), 10)
+
+	//Send the headers
+	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
+	w.Header().Set("Content-Type", FileContentType)
+	w.Header().Set("Content-Length", FileSize)
+
+	// Set offset back to 0 (from the 512 bytes we read)
+	f.Seek(0, 0)
+
+	// Copy to the client
+	io.Copy(w, f)
+
+	return
+
 }
 
 func (s *Server) ListFiles(w http.ResponseWriter, r *http.Request) {
 	log.Println("Listing Files...")
-	// we ship with edgy.jpeg
-	files := []string{"edgy.jpeg"}
 
-	_, err := os.Stat("/mnt/files/quote/")
+	envFilePath := os.Getenv(EnvFilePath)
+	if envFilePath == "" {
+		envFilePath = "/images/"
+	}
+
+	files := []string{}
+
+	if envFilePath != "/images/" {
+		files = append(files, "edgy.jpeg")
+	}
+
+	_, err := os.Stat(envFilePath)
 	if !os.IsNotExist(err) {
-		err := filepath.Walk("/mnt/files/quote/", func(path string, info os.FileInfo, err error) error {
+		err := filepath.Walk(envFilePath, func(path string, info os.FileInfo, err error) error {
 			if !info.IsDir() {
 				file := filepath.Base(path)
 				files = append(files, file)
@@ -496,7 +617,7 @@ func (s *Server) ListFiles(w http.ResponseWriter, r *http.Request) {
 			return nil
 		})
 		if err != nil {
-			log.Println("Error reading files from mounted directory")
+			log.Println("Error reading files from directory")
 		}
 	}
 
@@ -571,10 +692,16 @@ func (s *Server) ConfigureRouter() {
 	s.router.Get("/files/", s.ListFiles)
 	s.router.Get("/files/*", s.Download)
 
+	envFilePath := os.Getenv(EnvFilePath)
+	if envFilePath == "" {
+		envFilePath = "/images/"
+		log.Println("No FILE_PATH environment variable set, images will be uploaded to the container...")
+	}
+
 	// File uploading endpoints require a check to see if a volume is mounted
-	defaultFolder, err := os.Stat("/images/")
+	defaultFolder, err := os.Stat(envFilePath)
 	if !os.IsNotExist(err) {
-		log.Println("Found default directory: ", defaultFolder)
+		log.Println("Found storage directory: ", defaultFolder)
 		log.Println("enabling file upload endpoints")
 
 		s.router.Put("/files/*", s.Upload)
