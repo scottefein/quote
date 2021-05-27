@@ -519,7 +519,7 @@ func (s *Server) ConfigureRouter() {
 }
 
 func (s *Server) Start() error {
-	s.hub = newHub(s.random, s.quotes)
+	s.hub = newHub(s.random, s.quotes, s.id)
 	go s.hub.run()
 
 	listenAddr := fmt.Sprintf("%s:%d", s.host, s.port)
