@@ -14,10 +14,11 @@
 package main
 
 import (
-	"github.com/gorilla/websocket"
-	"github.com/plombardi89/gozeug/randomzeug"
 	"log"
 	"time"
+
+	"github.com/gorilla/websocket"
+	"github.com/plombardi89/gozeug/randomzeug"
 )
 
 const (
@@ -108,16 +109,18 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 
+	server string
 	random *randomzeug.Random
 	quotes []string
 }
 
-func newHub(random *randomzeug.Random, quotes []string) *Hub {
+func newHub(random *randomzeug.Random, quotes []string, serverId string) *Hub {
 	return &Hub{
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		clients:    make(map[*Client]bool),
 		random:     random,
+		server:     serverId,
 		quotes:     quotes,
 	}
 }
@@ -139,7 +142,7 @@ func (h *Hub) run() {
 		case <-ticker.C:
 			for client := range h.clients {
 				select {
-				case client.send <- []byte(h.random.RandomSelectionFromStringSlice(h.quotes)):
+				case client.send <- []byte(h.server + ": " + h.random.RandomSelectionFromStringSlice(h.quotes)):
 				default:
 					close(client.send)
 					delete(h.clients, client)
