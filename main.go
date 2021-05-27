@@ -17,26 +17,30 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
-	"github.com/gorilla/websocket"
-	"github.com/plombardi89/gozeug/randomzeug"
-	"github.com/openzipkin/zipkin-go"
-	"github.com/openzipkin/zipkin-go/model"
-	zipkinhttp "github.com/openzipkin/zipkin-go/middleware/http"
-	reporterhttp "github.com/openzipkin/zipkin-go/reporter/http"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"syscall"
 	"text/template"
 	"time"
+
+	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
+	"github.com/gorilla/websocket"
+	"github.com/openzipkin/zipkin-go"
+	zipkinhttp "github.com/openzipkin/zipkin-go/middleware/http"
+	"github.com/openzipkin/zipkin-go/model"
+	reporterhttp "github.com/openzipkin/zipkin-go/reporter/http"
+	"github.com/plombardi89/gozeug/randomzeug"
 )
 
 var port = 8080
@@ -52,9 +56,10 @@ const (
 	EnvZipkin      = "ZIPKIN_SERVER"
 	EnvZipkinPort  = "ZIPKIN_PORT"
 	EnvDebugZipkin = "ZIPKIN_DEBUG"
-	EnvConsulIP    = "CONSUL_IP"        // The IP of the Consul Pod                           #OPTIONAL - Consul Integration
-	EnvPodIP       = "POD_IP"			// The IP of this pod                                 #OPTIONAL - Consul Integration
-	EnvServiceName = "SERVICE_NAME"     // The Name of the service (default: quote-consul)    #OPTIONAL - Consul Integration
+	EnvConsulIP    = "CONSUL_IP"    // The IP of the Consul Pod                           #OPTIONAL - Consul Integration
+	EnvPodIP       = "POD_IP"       // The IP of this pod                                 #OPTIONAL - Consul Integration
+	EnvServiceName = "SERVICE_NAME" // The Name of the service (default: quote-consul)    #OPTIONAL - Consul Integration
+	EnvFilePath    = "FILE_PATH"    // The path where files will be stored				  #OPTIONAL - defaults to storing images in the container /images/ folder
 )
 
 type Server struct {
@@ -91,17 +96,21 @@ type DebugInfo struct {
 
 // Health check component of the ConsulPayload struct
 type HealthCheck struct {
-	HTTP	  string     `json:"HTTP"`
-	Dereg	  string     `json:"DeregisterCriticalServiceAfter"`
-	Interval  string	 `json:"Interval"`
+	HTTP     string `json:"HTTP"`
+	Dereg    string `json:"DeregisterCriticalServiceAfter"`
+	Interval string `json:"Interval"`
 }
 
 // information for registering with consul
 type ConsulPayload struct {
-	Name          string      `json:"Name"`
-	Address       string      `json:"Address"`
-	Port          int         `json:"Port"`
-	HealthCheck	  HealthCheck `json:"Check"`
+	Name        string      `json:"Name"`
+	Address     string      `json:"Address"`
+	Port        int         `json:"Port"`
+	HealthCheck HealthCheck `json:"Check"`
+}
+
+type FileList struct {
+	FileList []string `json:"FileList"`
 }
 
 var tmpl = template.Must(template.
@@ -204,10 +213,9 @@ func buildTracer(zipkinEndpoint string) (*zipkin.Tracer, error) {
 		log.Println(err)
 		return nil, err
 	}
- 
+
 	return tracer, err
 }
-
 
 // Registers this service with Consul if the environment variables are present
 func RegisterConsul(quotePort int) {
@@ -235,31 +243,30 @@ func RegisterConsul(quotePort int) {
 	consulUrl := fmt.Sprintf("%s%s%s", "http://", consulIP, ":8500/v1/agent/service/register")
 	log.Println("Consul service registration URL: ", consulUrl)
 
-
 	healthCheckUrl := fmt.Sprintf("%s%s%s%d%s", "http://", podIP, ":", quotePort, "/health")
 	log.Println("Health check URL:", healthCheckUrl)
 
 	// Part of the JSON payload we are creating below to register the service with Consul
-	healthCheck :=HealthCheck{
-		HTTP: healthCheckUrl,
-		Dereg: "1m",
+	healthCheck := HealthCheck{
+		HTTP:     healthCheckUrl,
+		Dereg:    "1m",
 		Interval: "30s",
 	}
 	payload := ConsulPayload{
-		Name: svcName,
-		Address: podIP,
-		Port: quotePort,
+		Name:        svcName,
+		Address:     podIP,
+		Port:        quotePort,
 		HealthCheck: healthCheck,
 	}
 
-	log.Println("Service registration payload: " , payload)
+	log.Println("Service registration payload: ", payload)
 
 	// Marshal the payload to JSON
 	payloadJson, err := json.MarshalIndent(payload, "", "    ")
 	if err != nil {
-        log.Println("Error generating Consul registration payload JSON: " , err)
+		log.Println("Error generating Consul registration payload JSON: ", err)
 		return
-    }
+	}
 
 	// Setup Http client to make request
 	requesterClient := &http.Client{}
@@ -267,19 +274,19 @@ func RegisterConsul(quotePort int) {
 	// Method is put, and the body is our marshaled JSON in bytes
 	consulRequest, err := http.NewRequest(http.MethodPut, consulUrl, bytes.NewBuffer(payloadJson))
 	if err != nil {
-		log.Println("Error building Consul request: " , err)
+		log.Println("Error building Consul request: ", err)
 		return
 	}
 
-    // Set header and Make the request
-    consulRequest.Header.Set("Content-Type", "application/json; charset=utf-8")
-    consulResponse, err := requesterClient.Do(consulRequest)
-    if err != nil {
-        log.Println("Error submitting request to Consul: " , err)
+	// Set header and Make the request
+	consulRequest.Header.Set("Content-Type", "application/json; charset=utf-8")
+	consulResponse, err := requesterClient.Do(consulRequest)
+	if err != nil {
+		log.Println("Error submitting request to Consul: ", err)
 		return
-    }
+	}
 
-    log.Println("Consul response code: ", consulResponse.StatusCode)
+	log.Println("Consul response code: ", consulResponse.StatusCode)
 	if consulResponse.StatusCode != 200 {
 		log.Println("Error in response from Consul service not registered successfully")
 		return
@@ -289,7 +296,6 @@ func RegisterConsul(quotePort int) {
 	log.Println(successMsg)
 	return
 }
-
 
 func (s *Server) GetRPS() int {
 	n := time.Now()
@@ -470,11 +476,178 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func GetFileContentType(out *os.File) (string, error) {
+
+	// Only the first 512 bytes are used to sniff the content type.
+	buffer := make([]byte, 512)
+
+	_, err := out.Read(buffer)
+	if err != nil {
+		return "", err
+	}
+
+	// Use the net/http package's handy DectectContentType function. Always returns a valid
+	// content-type by returning "application/octet-stream" if no others seemed to match.
+	contentType := http.DetectContentType(buffer)
+
+	return contentType, nil
+}
+
+func (s *Server) Upload(w http.ResponseWriter, r *http.Request) {
+	log.Println("Uploading File...")
+
+	envFilePath := os.Getenv(EnvFilePath)
+	if envFilePath == "" {
+		envFilePath = "/images/"
+	}
+
+	io.WriteString(w, "Upload files\n")
+
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		log.Println("ERROR: Could not find file in client upload request: ", err)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Header().Set("Content-Type", "text/html; text/html; charset=utf-8")
+		w.Write([]byte("Unable to read file from request"))
+		return
+	}
+	defer file.Close()
+
+	// Cant overwrite edgy.jpg
+	if handler.Filename == "edgy.jpeg" {
+		log.Println("ERROR: Client tried to overwrite dummy file: ")
+		w.WriteHeader(http.StatusForbidden)
+		w.Header().Set("Content-Type", "text/html; text/html; charset=utf-8")
+		w.Write([]byte("Sorry, you can't overwrite edgy.jpg"))
+		return
+	}
+
+	// build the path for saving the file
+	filePath := fmt.Sprintf("%s%s", envFilePath, handler.Filename)
+	log.Println("Saving uploaded file to path: ", filePath)
+
+	// copy example
+	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		log.Println("ERROR: Could not write file from client: ", filePath)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "text/html; text/html; charset=utf-8")
+		w.Write([]byte("Error saving file to local storage"))
+		return
+	}
+	defer f.Close()
+	io.Copy(f, file)
+	log.Println("SUCCESS, file uploaded to path: ", filePath)
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html; text/html; charset=utf-8")
+	w.Write([]byte("File uploaded successfully"))
+}
+
+func (s *Server) Download(w http.ResponseWriter, r *http.Request) {
+
+	envFilePath := os.Getenv(EnvFilePath)
+	if envFilePath == "" {
+		envFilePath = "/images/"
+	}
+
+	fileName := path.Base(r.URL.Path)
+	filePath := fmt.Sprintf("%s%s", envFilePath, fileName)
+
+	// check if they want edgy and overwrite the filepath
+	if fileName == "edgy.jpeg" {
+		filePath = "/images/edgy.jpeg"
+	}
+
+	// Open the File
+	f, err := os.Open(filePath)
+	if err != nil {
+		log.Println("ERROR: Client requested file not found: ", filePath)
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-Type", "text/html; text/html; charset=utf-8")
+		w.Write([]byte("Could not find file locally"))
+		return
+	}
+	defer f.Close()
+
+	// Set up a buffer for the header of the file from the first 512 bytes
+	FileHeader := make([]byte, 512)
+
+	// Grab info about the file to send to the client
+	f.Read(FileHeader)
+	FileContentType := http.DetectContentType(FileHeader)
+	FileStat, _ := f.Stat()
+	FileSize := strconv.FormatInt(FileStat.Size(), 10)
+
+	//Send the headers
+	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
+	w.Header().Set("Content-Type", FileContentType)
+	w.Header().Set("Content-Length", FileSize)
+
+	// Set offset back to 0 (from the 512 bytes we read)
+	f.Seek(0, 0)
+
+	// Copy to the client
+	io.Copy(w, f)
+
+	return
+
+}
+
+func (s *Server) ListFiles(w http.ResponseWriter, r *http.Request) {
+	log.Println("Listing Files...")
+
+	envFilePath := os.Getenv(EnvFilePath)
+	if envFilePath == "" {
+		envFilePath = "/images/"
+	}
+
+	files := []string{}
+
+	if envFilePath != "/images/" {
+		files = append(files, "edgy.jpeg")
+	}
+
+	_, err := os.Stat(envFilePath)
+	if !os.IsNotExist(err) {
+		err := filepath.Walk(envFilePath, func(path string, info os.FileInfo, err error) error {
+			if !info.IsDir() {
+				file := filepath.Base(path)
+				files = append(files, file)
+			}
+			return nil
+		})
+		if err != nil {
+			log.Println("Error reading files from directory")
+		}
+	}
+
+	payload := FileList{
+		FileList: files,
+	}
+
+	log.Println("File list payload:", payload)
+
+	// Marshal the payload to JSON
+	payloadJson, err := json.MarshalIndent(payload, "", "    ")
+	if err != nil {
+		log.Println("Error generating file list payload JSON: ", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(payloadJson); err != nil {
+		log.Panicln(err)
+	}
+
+}
+
 func (s *Server) ConfigureRouter() {
 
 	// Optional zipkin integration. Must set env variables for the code to run
 	if zipkinServer := os.Getenv(EnvZipkin); zipkinServer != "" {
-	
+
 		defZipkinPort := "9411"
 		zipkinPort, err := strconv.Atoi(getEnv(EnvZipkinPort, defZipkinPort))
 		if err != nil {
@@ -485,7 +658,7 @@ func (s *Server) ConfigureRouter() {
 
 		tracer, err := buildTracer(zipkinEndpoint)
 		if err != nil {
-			log.Println("Could not build Zipkin Tracer: " , err)
+			log.Println("Could not build Zipkin Tracer: ", err)
 			log.Println("Zipkin traces disabled, check environment variables. Continuing...")
 		} else {
 			s.router.Use(
@@ -503,17 +676,39 @@ func (s *Server) ConfigureRouter() {
 	s.router.Get("/", s.GetQuote)
 	s.router.Head("/", s.GetQuote)
 	s.router.Get("/get-quote/", s.GetQuote)
-	s.router.Get("/debug/*", s.Debug)
-	s.router.Get("/auth/*", s.TestAuth)
-	s.router.Post("/debug/", s.Debug)
-	s.router.Post("/health", s.HealthCheck)
-	s.router.Delete("/debug/", s.Debug)
-	s.router.Put("/debug/", s.Debug)
-	s.router.Options("/debug/*", s.Debug)
-	s.router.Get("/sleep/*", s.Sleep)
-	s.router.Get("/logout", s.Logout)
-	s.router.Get("/health", s.HealthCheck)
 	s.router.HandleFunc("/ws", s.StreamQuotes)
+	s.router.Delete("/debug/", s.Debug)
+	s.router.Post("/debug/", s.Debug)
+	s.router.Put("/debug/", s.Debug)
+	s.router.Get("/debug/*", s.Debug)
+	s.router.Options("/debug/*", s.Debug)
+	s.router.Post("/health", s.HealthCheck)
+	s.router.Get("/health", s.HealthCheck)
+	s.router.Get("/auth/*", s.TestAuth)
+	s.router.Get("/logout", s.Logout)
+	s.router.Get("/sleep/*", s.Sleep)
+
+	// These two endpoints can be enabled without a volume claim since we will serve a image that ships with the container
+	s.router.Get("/files/", s.ListFiles)
+	s.router.Get("/files/*", s.Download)
+
+	envFilePath := os.Getenv(EnvFilePath)
+	if envFilePath == "" {
+		envFilePath = "/images/"
+		log.Println("No FILE_PATH environment variable set, images will be uploaded to the container...")
+	}
+
+	// File uploading endpoints require a check to see if a volume is mounted
+	defaultFolder, err := os.Stat(envFilePath)
+	if !os.IsNotExist(err) {
+		log.Println("Found storage directory: ", defaultFolder)
+		log.Println("enabling file upload endpoints")
+
+		s.router.Put("/files/*", s.Upload)
+		s.router.Post("/files/*", s.Upload)
+	} else {
+		log.Println("Default directory not detected, disabling file upload endpoints")
+	}
 
 	s.router.Get(getEnv(EnvOpenAPIPath, "/.ambassador-internal/openapi-docs"), s.GetOpenAPIDocument)
 }
