@@ -10,7 +10,7 @@ dist: bionic
 before_install:
   - sudo apt-get update
   - sudo apt-get install --reinstall ca-certificates
-  - update-ca-certificates
+  - sudo update-ca-certificates
 
 script:
   - make build.image
