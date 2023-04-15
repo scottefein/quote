@@ -103,10 +103,11 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }} 
-        
+
     # dev env
     - run: |
-        cd score
+        cd .github/actions/score
         chmod +x deploy_dev.sh
         IMAGE_NAME='${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}' envsubst < overrides.quote.yaml > overrides.yaml
-        HUMANITEC_ENVIRONMENT=development ./deploy_dev.sh
+        cd ~/
+        HUMANITEC_ENVIRONMENT=development ./github/actions/score/deploy_dev.sh
