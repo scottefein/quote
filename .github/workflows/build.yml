@@ -106,8 +106,6 @@ jobs:
 
     # dev env
     - run: |
-        ls
-        ls ~/.github/actions/
-        chmod +x ~/.github/actions/score/deploy_dev.sh
+        chmod +x ~/score/deploy_dev.sh
         IMAGE_NAME='${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}' envsubst < overrides.quote.yaml > overrides.yaml
-        HUMANITEC_ENVIRONMENT=development ./github/actions/score/deploy_dev.sh
+        HUMANITEC_ENVIRONMENT=development ~/score/deploy_dev.sh
