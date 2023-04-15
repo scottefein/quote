@@ -3,8 +3,8 @@ set -e
 
 source "deploy_helper.sh"
 
-score-humanitec delta --api-url $HUMANITEC_URL --token $HUMANITEC_TOKEN --org $HUMANITEC_ORG --app $HUMANITEC_APP --env $HUMANITEC_ENVIRONMENT -f score.debug.yaml --extensions extensions.debug.yaml --overrides overrides.debug.yaml --deploy
-WORKLOAD="debug"
+score-humanitec delta --api-url $HUMANITEC_URL --token $HUMANITEC_TOKEN --org $HUMANITEC_ORG --app $HUMANITEC_APP --env $HUMANITEC_ENVIRONMENT -f score.quote.yaml --extensions extensions.yaml --overrides overrides.yaml --deploy
+WORKLOAD="quote"
 humanitec_wait_for_deployment
 
 # score-humanitec delta --api-url $HUMANITEC_URL --token $HUMANITEC_TOKEN --org $HUMANITEC_ORG --app $HUMANITEC_APP --env $HUMANITEC_ENVIRONMENT -f score.backend.yaml --extensions extensions.backend.yaml --deploy
