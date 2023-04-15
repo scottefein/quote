@@ -108,5 +108,5 @@ jobs:
     - run: |
         cd score
         chmod +x deploy_dev.sh
-        IMAGE_NAME='${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}' envsubst < ../overrides.quote.yaml > overrides.yaml
+        IMAGE_NAME='${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}' envsubst < overrides.quote.yaml > overrides.yaml
         HUMANITEC_ENVIRONMENT=development deploy_dev.sh
