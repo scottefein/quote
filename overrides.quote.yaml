@@ -1,0 +1,6 @@
+---
+containers:
+  quote:
+    image: $IMAGE_NAME
+    command:
+    args:

@@ -1,0 +1,8 @@
+---
+apiVersion: humanitec.org/v1b1
+
+resources:
+  "analytics":
+    scope: shared
+  "products":
+    scope: shared

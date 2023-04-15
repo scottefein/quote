@@ -1,0 +1,20 @@
+---
+apiVersion: score.dev/v1b1
+
+metadata:
+  name: quote
+
+service:
+  ports:
+    p80:
+      port: 80
+      targetPort: 80
+
+containers:
+  quote:
+    image: nginxdemos/hello:latest
+# resources:
+#   "analytics":
+#     type: postgres
+#   "products":
+#     type: mariadb

@@ -19,6 +19,10 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  HUMANITEC_ORG: ${{ secrets.HUMANITEC_ORG }}
+  HUMANITEC_TOKEN: ${{ secrets.HUMANITEC_SECRET }}
+  HUMANITEC_APP: ${{ secrets.HUMANITEC_APP }}
+  HUMANITEC_URL: "https://api.humanitec.io"
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -99,8 +103,10 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }} 
-    - name: Push to Humanitec
-      uses: humanitec/build-push-to-humanitec@v1
-      with:
-        humanitec-token: ${{ secrets.HUMANITEC_SECRET }}
-        organization: sef-industries
+        
+    # dev env
+    - run: |
+        cd score
+        chmod +x deploy_dev.sh
+        IMAGE_NAME='${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}' envsubst < overrides.quote.yaml > overrides.yaml
+        HUMANITEC_ENVIRONMENT=development ./deploy_dev.sh
