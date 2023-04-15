@@ -30,8 +30,29 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-    - uses: actions/checkout@v2
-    
+    - uses: actions/checkout@v3
+    # prep work
+    - run: |
+        ls
+        pwd
+        echo $HOME
+        mkdir $HOME/.bin
+        echo $PATH
+        echo $GITHUB_PATH
+        echo "${HOME}/.bin" >> $GITHUB_PATH
+        echo $PATH
+        echo $GITHUB_PATH
+    - run: |
+        curl -L https://github.com/a8m/envsubst/releases/download/v1.4.2/envsubst-Linux-x86_64 -o ~/.bin/envsubst
+        curl -L https://github.com/score-spec/score-humanitec/releases/download/0.3.0-rc1/score-humanitec_0.3.0-rc1_linux_amd64.tar.gz -o /tmp/score.tar.gz
+        tar xvzf /tmp/score.tar.gz -C /tmp && cp /tmp/score-humanitec ~/.bin
+        curl -L https://releases.hashicorp.com/terraform/1.4.0/terraform_1.4.0_linux_amd64.zip -o /tmp/terraform.zip
+        unzip /tmp/terraform.zip && mv terraform ~/.bin
+        chmod +x ~/.bin
+        terraform --version
+        jq --version
+        score-humanitec --version
+        
     # Setup Go
     - name: Setup Go
       uses: actions/setup-go@v2
@@ -78,3 +99,8 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }} 
+    - name: Push to Humanitec
+      uses: humanitec/build-push-to-humanitec@v1
+      with:
+        humanitec-token: ${{ secrets.HUMANITEC_SECRET }}
+        organization: sef-industries
