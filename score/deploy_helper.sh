@@ -71,7 +71,7 @@ humanitec_create_app_environment () {
 cat <<-EOF > /tmp/new_environment.json
     {
     "from_deploy_id": "$DEPLOYMENT_ID",
-    "id": "$HUMANITEC_ENVIRONMENT",
+    "id": "$HUMANITEC_FROM_ENVIRONMENT",
     "name": "$HUMANITEC_ENVIRONMENT",
     "type": "$HUMANITEC_ENVIRONMENT"
     }
