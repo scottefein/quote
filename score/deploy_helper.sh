@@ -78,6 +78,8 @@ cat <<-EOF > /tmp/new_environment.json
     }
 EOF
 
+cat /tmp/new_environment.json
+
     STATUSCODE=$(curl -X POST -k --silent --output /dev/stderr --write-out "%{http_code}" $HUMANITEC_URL/orgs/$HUMANITEC_ORG/apps/$HUMANITEC_APP/envs -H "Authorization: Bearer $HUMANITEC_TOKEN"  -d @/tmp/new_environment.json)
     
     if [[ $STATUSCODE  == 200 ]] || [[ $STATUSCODE  == 201 ]] || [[ $STATUSCODE == 409 ]] ; then
