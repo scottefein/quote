@@ -74,7 +74,7 @@ cat <<-EOF > /tmp/new_environment.json
     "id": "$HUMANITEC_ENVIRONMENT",
     "name": "$HUMANITEC_ENVIRONMENT",
     "type": "$HUMANITEC_ENVIRONMENT",
-    "namespace": "$HUMANITEC_APP-$HUMANITEC_ENVIRONMENT-namespace",
+    "namespace": "$HUMANITEC_APP-$HUMANITEC_ENVIRONMENT-namespace"
     }
 EOF
 
