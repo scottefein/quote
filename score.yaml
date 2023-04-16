@@ -6,13 +6,16 @@ metadata:
 
 service:
   ports:
-    p80:
+    www:
       port: 80
-      targetPort: 80
 
 containers:
   quote:
     image: nginxdemos/hello:latest
+
+resources:
+  dns:
+    type: dns
 # resources:
 #   "analytics":
 #     type: postgres

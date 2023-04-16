@@ -1,8 +1,12 @@
 ---
 apiVersion: humanitec.org/v1b1
 
-resources:
-  "analytics":
-    scope: shared
-  "products":
-    scope: shared
+profile: "humanitec/default-module"
+spec:
+  "ingress":
+    rules:
+      "${resources.dns}":
+        http:
+          "/":
+            type: prefix
+            port: 80
