@@ -2,7 +2,7 @@
 set -e
 
 source "deploy_helper.sh"
-
+export HUMANITEC_FROM_ENVIRONMENT="development"
 humanitec_create_app_environment
 sleep 3
 
